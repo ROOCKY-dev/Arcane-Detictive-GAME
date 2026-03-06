@@ -4,7 +4,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { sql } from '@codemirror/lang-sql';
 import { EditorView } from '@codemirror/view';
 import type { ForgeFormData } from './types';
-import { Field, inputClass } from './ForgeSteps';
+import { Field } from './ForgeSteps';
 
 interface ForgeDbStepProps {
   form: ForgeFormData;

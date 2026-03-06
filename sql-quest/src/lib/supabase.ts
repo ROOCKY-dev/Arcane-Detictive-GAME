@@ -39,6 +39,7 @@ export interface Database {
           class_id?: string | null;
           updated_at?: string;
         };
+        Relationships: [];
       };
       quest_progress: {
         Row: {
@@ -73,6 +74,7 @@ export interface Database {
           submitted_query?: string | null;
           completed_at?: string | null;
         };
+        Relationships: [];
       };
       user_achievements: {
         Row: {
@@ -87,6 +89,7 @@ export interface Database {
           earned_at?: string;
         };
         Update: Record<string, never>;
+        Relationships: [];
       };
       classes: {
         Row: {
@@ -107,6 +110,7 @@ export interface Database {
           name?: string;
           description?: string | null;
         };
+        Relationships: [];
       };
       custom_quests: {
         Row: {
@@ -138,12 +142,23 @@ export interface Database {
           requires_strict_order?: boolean;
           database_url?: string | null;
         };
+        Relationships: [];
       };
     };
+    // Required by supabase-js v2.x for full type compatibility
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }
 
 export type TypedSupabaseClient = SupabaseClient<Database>;
+
+// Convenience row aliases used for explicit casts when supabase-js generic
+// inference collapses to {} (known supabase-js v2.98 behaviour without codegen).
+type ProfileRow = Database['public']['Tables']['profiles']['Row'];
+type QuestProgressRow = Database['public']['Tables']['quest_progress']['Row'];
 
 // ─── Singleton client ─────────────────────────────────────────────────────────
 
@@ -217,7 +232,9 @@ export async function getCurrentSession() {
 // ─── Profile helpers ──────────────────────────────────────────────────────────
 
 /** Fetch the full profile for a user ID. */
-export async function getProfile(userId: string) {
+export async function getProfile(
+  userId: string
+): Promise<Database['public']['Tables']['profiles']['Row'] | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from('profiles')
@@ -225,7 +242,7 @@ export async function getProfile(userId: string) {
     .eq('id', userId)
     .single();
   if (error) return null;
-  return data;
+  return data as Database['public']['Tables']['profiles']['Row'];
 }
 
 // ─── Progress sync ────────────────────────────────────────────────────────────
@@ -285,7 +302,8 @@ export async function loadQuestProgressFromCloud(
 
   if (error || !data) return [];
 
-  return data.map((row) => ({
+  const rows = data as QuestProgressRow[];
+  return rows.map((row) => ({
     questId: row.quest_id,
     locationId: row.location_id,
     completed: row.completed,
@@ -321,30 +339,40 @@ export async function getStudentsForTeacher(teacherId: string) {
   if (!supabase) return [];
 
   // Get all class IDs this teacher owns
-  const { data: classes } = await supabase
+  const { data: classesRaw } = await supabase
     .from('classes')
     .select('id')
     .eq('teacher_id', teacherId);
 
+  const classes = classesRaw as { id: string }[] | null;
   if (!classes || classes.length === 0) return [];
 
   const classIds = classes.map((c) => c.id);
 
   // Fetch profiles enrolled in those classes
-  const { data: students } = await supabase
+  const { data: studentsRaw } = await supabase
     .from('profiles')
     .select('id, username, display_name, avatar_url, created_at')
     .in('class_id', classIds);
 
+  const students = studentsRaw as Pick<
+    ProfileRow,
+    'id' | 'username' | 'display_name' | 'avatar_url' | 'created_at'
+  >[] | null;
   if (!students) return [];
 
   // Fetch completion counts per student
   const studentIds = students.map((s) => s.id);
-  const { data: progressRows } = await supabase
+  const { data: progressRaw } = await supabase
     .from('quest_progress')
     .select('user_id, quest_id, completed, hints_used, completed_at')
     .in('user_id', studentIds)
     .eq('completed', true);
+
+  const progressRows = progressRaw as Pick<
+    QuestProgressRow,
+    'user_id' | 'quest_id' | 'completed' | 'hints_used' | 'completed_at'
+  >[] | null;
 
   return students.map((student) => {
     const studentProgress = (progressRows ?? []).filter(
@@ -386,35 +414,43 @@ export async function getApprenticeRoster(
   if (!supabase) return [];
 
   // Resolve class IDs owned by this teacher
-  const { data: classes } = await supabase
+  const { data: classesRaw2 } = await supabase
     .from('classes')
     .select('id')
     .eq('teacher_id', teacherId);
 
-  if (!classes || classes.length === 0) return [];
+  const classes2 = classesRaw2 as { id: string }[] | null;
+  if (!classes2 || classes2.length === 0) return [];
 
-  const classIds = classes.map((c) => c.id);
+  const classIds = classes2.map((c) => c.id);
 
   // All students enrolled in those classes
-  const { data: students } = await supabase
+  const { data: studentsRaw2 } = await supabase
     .from('profiles')
     .select('id, username, display_name, avatar_url')
     .in('class_id', classIds)
     .eq('role', 'student');
 
-  if (!students || students.length === 0) return [];
+  const students2 = studentsRaw2 as Pick<
+    ProfileRow,
+    'id' | 'username' | 'display_name' | 'avatar_url'
+  >[] | null;
+  if (!students2 || students2.length === 0) return [];
 
-  const studentIds = students.map((s) => s.id);
+  const studentIds = students2.map((s) => s.id);
 
   // All quest_progress rows for these students (completed + in-progress)
-  const { data: allProgress } = await supabase
+  const { data: allProgressRaw } = await supabase
     .from('quest_progress')
     .select('user_id, completed, attempts, completed_at')
     .in('user_id', studentIds);
 
-  const rows = allProgress ?? [];
+  const rows = (allProgressRaw as Pick<
+    QuestProgressRow,
+    'user_id' | 'completed' | 'attempts' | 'completed_at'
+  >[] | null) ?? [];
 
-  return students.map((student) => {
+  return students2.map((student) => {
     const studentRows = rows.filter((r) => r.user_id === student.id);
     const questsSolved = studentRows.filter((r) => r.completed).length;
     const totalAttempts = studentRows.reduce((sum, r) => sum + (r.attempts ?? 0), 0);
@@ -449,7 +485,7 @@ export async function uploadCustomDatabase(
 ): Promise<string | null> {
   if (!supabase) return null;
 
-  const blob = new Blob([data], { type: 'application/x-sqlite3' });
+  const blob = new Blob([data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer], { type: 'application/x-sqlite3' });
   const path = `${questId}.sqlite`;
 
   const { error } = await supabase.storage

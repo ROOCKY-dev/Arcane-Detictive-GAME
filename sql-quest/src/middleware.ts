@@ -4,7 +4,7 @@
  * If Supabase is not configured, the guard is skipped (dev/guest mode).
  */
 
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/auth-helpers-nextjs';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -23,7 +23,22 @@ export async function middleware(req: NextRequest) {
   // Skip guard when Supabase is not configured
   if (!isSupabaseReady) return res;
 
-  const supabase = createMiddlewareClient({ req, res });
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name) {
+        return req.cookies.get(name)?.value;
+      },
+      set(name, value, options) {
+        req.cookies.set({ name, value, ...options });
+        res.cookies.set({ name, value, ...options });
+      },
+      remove(name, options) {
+        req.cookies.set({ name, value: '', ...options });
+        res.cookies.set({ name, value: '', ...options });
+      },
+    },
+  });
+
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -39,7 +54,8 @@ export async function middleware(req: NextRequest) {
     .eq('id', session.user.id)
     .single();
 
-  if (!profile || profile.role !== 'teacher') {
+  const profileRow = profile as { role: string } | null;
+  if (!profileRow || profileRow.role !== 'teacher') {
     return NextResponse.redirect(new URL('/?error=teacher_only', req.url));
   }
 

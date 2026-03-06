@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MagicalButton } from '@/components/ui/MagicalButton';
 
@@ -84,7 +85,7 @@ export function NPCDialogue({
             <div className="flex items-center gap-4 mb-4">
               <div className="shrink-0">
                 {avatarUrl ? (
-                  <img
+                  <Image
                     src={avatarUrl}
                     alt={npcName}
                     width={96}
