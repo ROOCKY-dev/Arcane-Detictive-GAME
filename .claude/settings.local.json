@@ -4,7 +4,10 @@
       "Bash(pnpm:*)",
       "Bash(node:*)",
       "Bash(npx create-next-app@latest:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm:*)",
+      "Bash(mkdir:*)",
+      "Bash"
     ]
   }
 }
