@@ -5,10 +5,11 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
-import { getApprenticeRoster, isSupabaseConfigured } from '@/lib/supabase';
-import type { ApprenticeRosterRow } from '@/lib/supabase';
+import { getApprenticeRoster, getTeacherClasses, isSupabaseConfigured } from '@/lib/supabase';
+import type { ApprenticeRosterRow, ClassRow } from '@/lib/supabase';
 
 const TOTAL_QUESTS = 13; // 4 archives + 3 apothecary + 3 beast + 4 underworld
 
@@ -30,12 +31,14 @@ const MOCK_APPRENTICES: ApprenticeRosterRow[] = [
 export default function ApprenticesPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [apprentices, setApprentices] = useState<ApprenticeRosterRow[]>([]);
+  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [selectedClass, setSelectedClass] = useState<string>('all');
+  const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [usingMock, setUsingMock] = useState(false);
 
   useEffect(() => {
-    // Wait for auth to resolve before fetching
     if (authLoading) return;
 
     if (!isSupabaseConfigured || !user) {
@@ -47,10 +50,14 @@ export default function ApprenticesPage() {
 
     let cancelled = false;
 
-    getApprenticeRoster(user.id)
-      .then((rows) => {
+    Promise.all([
+      getApprenticeRoster(user.id),
+      getTeacherClasses(user.id),
+    ])
+      .then(([rows, cls]) => {
         if (cancelled) return;
         setApprentices(rows);
+        setClasses(cls);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -63,15 +70,25 @@ export default function ApprenticesPage() {
     return () => { cancelled = true; };
   }, [user, authLoading]);
 
+  // NOTE: ApprenticeRosterRow doesn't currently include class_id; filter applies when classes exist
+  const filtered = useMemo(() => {
+    let list = apprentices;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((a) => a.displayName.toLowerCase().includes(q) || a.username.toLowerCase().includes(q));
+    }
+    return list;
+  }, [apprentices, search]);
+
   // ── Derived stats ──────────────────────────────────────────────────────────
-  const totalEnrolled = apprentices.length;
+  const totalEnrolled = filtered.length;
   const avgSolved =
     totalEnrolled > 0
-      ? (apprentices.reduce((s, a) => s + a.questsSolved, 0) / totalEnrolled).toFixed(1)
+      ? (filtered.reduce((s, a) => s + a.questsSolved, 0) / totalEnrolled).toFixed(1)
       : '0';
   const topScore =
-    totalEnrolled > 0 ? Math.max(...apprentices.map((a) => a.questsSolved)) : 0;
-  const activeToday = apprentices.filter(
+    totalEnrolled > 0 ? Math.max(...filtered.map((a) => a.questsSolved)) : 0;
+  const activeToday = filtered.filter(
     (a) => a.lastActive?.slice(0, 10) === TODAY
   ).length;
 
@@ -91,6 +108,38 @@ export default function ApprenticesPage() {
           {error}
         </div>
       )}
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name..."
+          className="bg-parchment-dark/60 border border-border-gold/30 rounded px-3 py-1.5 text-sm font-inter text-parchment-light placeholder:text-parchment-light/25 focus:outline-none focus:border-arcane-gold/60 focus:ring-1 focus:ring-arcane-gold/20 transition-colors w-52"
+        />
+        {classes.length > 0 && (
+          <select
+            value={selectedClass}
+            onChange={(e) => setSelectedClass(e.target.value)}
+            className="bg-parchment-dark/60 border border-border-gold/30 rounded px-3 py-1.5 text-sm font-inter text-parchment-light focus:outline-none focus:border-arcane-gold/60 transition-colors"
+          >
+            <option value="all">All Classes</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
+        {(search || selectedClass !== 'all') && (
+          <button
+            type="button"
+            onClick={() => { setSearch(''); setSelectedClass('all'); }}
+            className="text-parchment-light/40 hover:text-parchment-light/70 text-xs font-inter transition-colors"
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -116,18 +165,19 @@ export default function ApprenticesPage() {
               <Th align="center">Total Attempts</Th>
               <Th align="center">Efficiency</Th>
               <Th align="right">Last Active</Th>
+              <Th align="right">Detail</Th>
             </tr>
           </thead>
           <tbody>
             {isLoading
               ? Array.from({ length: 5 }).map((_, i) => <RowSkeleton key={i} idx={i} />)
-              : apprentices.map((apprentice, idx) => (
+              : filtered.map((apprentice, idx) => (
                   <ApprenticeRow key={apprentice.id} apprentice={apprentice} idx={idx} />
                 ))}
           </tbody>
         </table>
 
-        {!isLoading && apprentices.length === 0 && !error && (
+        {!isLoading && filtered.length === 0 && !error && (
           <div className="text-center py-12 text-parchment-light/30 font-inter text-sm">
             No apprentices enrolled yet. Share your class invite code to get started.
           </div>
@@ -179,6 +229,14 @@ function ApprenticeRow({ apprentice, idx }: { apprentice: ApprenticeRosterRow; i
       <td className="px-4 py-3 text-right text-parchment-light/40 text-xs">
         {apprentice.lastActive ? formatDate(apprentice.lastActive) : 'Never'}
       </td>
+      <td className="px-4 py-3 text-right">
+        <Link
+          href={`/archmage-tower/apprentices/${apprentice.id}`}
+          className="text-arcane-blue/60 hover:text-arcane-blue text-xs font-inter underline underline-offset-2 transition-colors"
+        >
+          View
+        </Link>
+      </td>
     </tr>
   );
 }
@@ -203,7 +261,7 @@ function RowSkeleton({ idx }: { idx: number }) {
         idx % 2 === 0 ? 'bg-parchment-dark' : 'bg-parchment-dark/60',
       ].join(' ')}
     >
-      {[160, 60, 60, 60, 80].map((w, i) => (
+      {[160, 60, 60, 60, 80, 40].map((w, i) => (
         <td key={i} className="px-4 py-3">
           <div
             className="h-3 rounded bg-parchment/10 mx-auto"

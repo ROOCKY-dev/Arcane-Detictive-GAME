@@ -4,7 +4,7 @@
  * If Supabase is not configured, the guard is skipped (dev/guest mode).
  */
 
-import { createServerClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -25,16 +25,14 @@ export async function middleware(req: NextRequest) {
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
-      get(name) {
-        return req.cookies.get(name)?.value;
+      getAll() {
+        return req.cookies.getAll();
       },
-      set(name, value, options) {
-        req.cookies.set({ name, value, ...options });
-        res.cookies.set({ name, value, ...options });
-      },
-      remove(name, options) {
-        req.cookies.set({ name, value: '', ...options });
-        res.cookies.set({ name, value: '', ...options });
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          req.cookies.set(name, value);
+          res.cookies.set(name, value, options);
+        });
       },
     },
   });
@@ -44,7 +42,10 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    return NextResponse.redirect(new URL('/?error=login_required', req.url));
+    const url = req.nextUrl.clone();
+    url.pathname = '/auth/login';
+    url.searchParams.set('reason', 'login_required');
+    return NextResponse.redirect(url);
   }
 
   // Fetch the user's role from the profiles table
@@ -56,7 +57,10 @@ export async function middleware(req: NextRequest) {
 
   const profileRow = profile as { role: string } | null;
   if (!profileRow || profileRow.role !== 'teacher') {
-    return NextResponse.redirect(new URL('/?error=teacher_only', req.url));
+    const url = req.nextUrl.clone();
+    url.pathname = '/play';
+    url.searchParams.set('reason', 'teacher_only');
+    return NextResponse.redirect(url);
   }
 
   return res;

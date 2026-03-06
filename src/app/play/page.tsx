@@ -1,6 +1,8 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { WorldMap } from '@/components/game/WorldMap';
 import { MagicalButton } from '@/components/ui/MagicalButton';
@@ -10,9 +12,19 @@ import { useAuth } from '@/hooks/useAuth';
 import { LOCATIONS } from '@/data/locations';
 
 export default function WorldMapPage() {
+  return (
+    <Suspense>
+      <WorldMapInner />
+    </Suspense>
+  );
+}
+
+function WorldMapInner() {
   const { locationProgress } = useProgress();
   const { unlockedLocationIds } = useGameState();
   const { user, isLoading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
+  const reason = searchParams.get('reason');
 
   return (
     <div className="min-h-screen bg-parchment-dark">
@@ -50,6 +62,12 @@ export default function WorldMapPage() {
       </header>
 
       <main className="max-w-3xl mx-auto py-8 px-4">
+        {reason === 'teacher_only' && (
+          <div className="mb-6 border border-arcane-red/30 bg-arcane-red/5 rounded p-3 text-arcane-red text-xs font-inter text-center">
+            The Archmage Tower is restricted to teachers. Sign in with a teacher account to access it.
+          </div>
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -68,6 +86,24 @@ export default function WorldMapPage() {
           locationProgress={locationProgress}
           unlockedLocationIds={unlockedLocationIds}
         />
+
+        {/* Notice Board — for students with class assignments */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mt-10 border border-border-gold/20 rounded-lg p-5 bg-parchment-dark/40 flex items-center justify-between gap-4"
+        >
+          <div>
+            <p className="font-cinzel text-arcane-gold font-bold text-sm">📜 Notice Board</p>
+            <p className="text-parchment-light/40 text-xs font-inter mt-0.5">
+              Received a Quest Code from your Archmage? Enter it here to begin your assignment.
+            </p>
+          </div>
+          <Link href="/play/notice-board" className="shrink-0">
+            <MagicalButton variant="blue" size="sm">Open Assignment</MagicalButton>
+          </Link>
+        </motion.div>
       </main>
     </div>
   );

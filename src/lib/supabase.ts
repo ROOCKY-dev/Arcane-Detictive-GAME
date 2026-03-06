@@ -212,18 +212,22 @@ export async function signUpWithEmail(
 ): Promise<string | null> {
   if (!supabase) return 'Supabase is not configured.';
 
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  // Pass username + role as metadata — the DB trigger reads these to auto-create
+  // the profile row even if email confirmation is enabled (no client session yet).
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { username, role } },
+  });
   if (error) return error.message;
   if (!data.user) return 'Registration failed — no user returned.';
 
-  // Insert the profile row with the chosen role
-  const { error: profileError } = await supabase.from('profiles').insert({
-    id: data.user.id,
-    username,
-    role,
-  });
+  // Also attempt a client-side insert for environments where email confirmation
+  // is disabled (user gets a session immediately). ON CONFLICT DO NOTHING is
+  // enforced by the trigger, so a duplicate insert is harmless.
+  await supabase.from('profiles').insert({ id: data.user.id, username, role }).maybeSingle();
 
-  return profileError ? profileError.message : null;
+  return null;
 }
 
 /** Sign out the current user. */
@@ -695,4 +699,69 @@ export async function joinClassByCode(
     .eq('id', userId);
 
   return error ? error.message : null;
+}
+
+// ─── Student detail (teacher view) ───────────────────────────────────────────
+
+export interface StudentQuestProgressRow {
+  quest_id: string;
+  location_id: string;
+  completed: boolean;
+  hints_used: number;
+  attempts: number;
+  time_seconds: number | null;
+  submitted_query: string | null;
+  completed_at: string | null;
+}
+
+export interface StudentDetail {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role: string;
+  createdAt: string;
+  progress: StudentQuestProgressRow[];
+}
+
+/**
+ * Fetch a student's full profile + quest progress for the teacher dashboard.
+ * The teacher RLS policies allow reading student profiles and quest_progress.
+ */
+export async function getStudentDetail(studentId: string): Promise<StudentDetail | null> {
+  if (!supabase) return null;
+
+  const { data: profileRaw } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url, role, created_at')
+    .eq('id', studentId)
+    .single();
+
+  if (!profileRaw) return null;
+  const p = profileRaw as {
+    id: string;
+    username: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    role: string;
+    created_at: string;
+  };
+
+  const { data: progressRaw } = await supabase
+    .from('quest_progress')
+    .select('quest_id, location_id, completed, hints_used, attempts, time_seconds, submitted_query, completed_at')
+    .eq('user_id', studentId)
+    .order('completed_at', { ascending: false, nullsFirst: false });
+
+  const progress = (progressRaw as StudentQuestProgressRow[] | null) ?? [];
+
+  return {
+    id: p.id,
+    username: p.username,
+    displayName: p.display_name ?? p.username,
+    avatarUrl: p.avatar_url,
+    role: p.role,
+    createdAt: p.created_at,
+    progress,
+  };
 }

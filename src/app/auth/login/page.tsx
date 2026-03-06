@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,7 +12,17 @@ import type { UserRole } from '@/types/user';
 type Mode = 'signin' | 'signup';
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectReason = searchParams.get('reason');
   const { user, isLoading: authLoading, signIn, signUp } = useAuth();
   const { loadFromSupabase } = useGameState();
 
@@ -96,6 +106,12 @@ export default function LoginPage() {
         </div>
 
         {/* Card */}
+        {redirectReason === 'login_required' && (
+          <div className="mb-4 border border-arcane-gold/30 bg-arcane-gold/5 rounded p-3 text-arcane-gold/80 text-xs font-inter text-center">
+            Sign in to access the Archmage Tower.
+          </div>
+        )}
+
         <div className="bg-parchment-dark border border-border-gold/40 rounded-lg shadow-arcane-gold p-6">
           <div className="text-center mb-5">
             <h2 className="font-cinzel text-arcane-gold text-lg font-bold tracking-wide">
