@@ -10,7 +10,9 @@ import { useAuth } from '@/hooks/useAuth';
 
 const NAV = [
   { href: '/archmage-tower/apprentices', label: 'My Apprentices', icon: '📜' },
-  { href: '/archmage-tower/forge', label: 'Forge a Quest', icon: '⚒️' },
+  { href: '/archmage-tower/my-quests',   label: 'My Quests',      icon: '📋' },
+  { href: '/archmage-tower/classes',     label: 'My Classes',     icon: '🏫' },
+  { href: '/archmage-tower/forge',       label: 'Forge a Quest',  icon: '⚒️' },
 ];
 
 export default function ArchmageTowerLayout({
@@ -59,8 +61,14 @@ export default function ArchmageTowerLayout({
           })}
         </nav>
 
-        {/* Back to game */}
-        <div className="px-3 py-4 border-t border-border-gold/20">
+        {/* Footer links */}
+        <div className="px-3 py-4 border-t border-border-gold/20 space-y-1">
+          <Link
+            href="/profile"
+            className="flex items-center gap-2 px-3 py-2 rounded text-xs font-inter text-parchment-light/30 hover:text-parchment-light/60 transition-colors"
+          >
+            👤 Profile
+          </Link>
           <Link
             href="/play"
             className="flex items-center gap-2 px-3 py-2 rounded text-xs font-inter text-parchment-light/30 hover:text-parchment-light/60 transition-colors"

@@ -20,43 +20,54 @@ const DIFFICULTIES: { value: QuestDifficulty; label: string }[] = [
 export function ForgeStep1({ form, update }: StepProps) {
   return (
     <div className="space-y-5">
-      <StepHeader title="Quest Metadata" hint="Define the identity of your mystery." />
+      <StepHeader title="Quest Metadata" hint="Define the identity of your mystery and the NPC guide." />
 
       <Field label="Quest Title" required>
-        <input
-          type="text"
-          value={form.title}
-          onChange={(e) => update({ title: e.target.value })}
-          placeholder="e.g. The Vanishing Ledger"
-          className={inputClass}
-        />
+        <input type="text" value={form.title} onChange={(e) => update({ title: e.target.value })}
+          placeholder="e.g. The Vanishing Ledger" className={inputClass} />
       </Field>
 
-      <Field label="Location" required>
-        <select
-          value={form.locationId}
-          onChange={(e) => update({ locationId: e.target.value })}
-          className={inputClass}
-        >
-          {LOCATIONS.map((loc) => (
-            <option key={loc.id} value={loc.id}>
-              {loc.iconEmoji} {loc.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Location" required>
+          <select value={form.locationId} onChange={(e) => update({ locationId: e.target.value })} className={inputClass}>
+            {LOCATIONS.map((loc) => (
+              <option key={loc.id} value={loc.id}>{loc.iconEmoji} {loc.name}</option>
+            ))}
+          </select>
+        </Field>
 
-      <Field label="Difficulty" required>
-        <select
-          value={form.difficulty}
-          onChange={(e) => update({ difficulty: e.target.value as QuestDifficulty })}
-          className={inputClass}
-        >
-          {DIFFICULTIES.map((d) => (
-            <option key={d.value} value={d.value}>{d.label}</option>
-          ))}
-        </select>
-      </Field>
+        <Field label="Difficulty" required>
+          <select value={form.difficulty} onChange={(e) => update({ difficulty: e.target.value as QuestDifficulty })} className={inputClass}>
+            {DIFFICULTIES.map((d) => (
+              <option key={d.value} value={d.value}>{d.label}</option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <div className="border-t border-border-gold/10 pt-4">
+        <p className="text-parchment-light/40 text-xs font-inter mb-3">
+          NPC Guide — the character who briefs the apprentice. Leave blank for a generic prompt.
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="NPC Name">
+            <input type="text" value={form.npcName} onChange={(e) => update({ npcName: e.target.value })}
+              placeholder="e.g. Archmage Codex" className={inputClass} />
+          </Field>
+          <Field label="NPC Role / Title">
+            <input type="text" value={form.npcDialogue && form.npcName ? '' : ''}
+              placeholder="e.g. Keeper of Records"
+              className={`${inputClass} opacity-60`}
+              disabled
+              title="Set via the dialogue field below" />
+          </Field>
+        </div>
+        <Field label="NPC Opening Dialogue">
+          <textarea value={form.npcDialogue} onChange={(e) => update({ npcDialogue: e.target.value })}
+            placeholder="Welcome, young Inquisitor! A most troubling matter has come to my attention..."
+            rows={3} className={`${inputClass} resize-y leading-relaxed mt-2`} />
+        </Field>
+      </div>
     </div>
   );
 }
@@ -109,57 +120,57 @@ export function ForgeStep3({ form, update }: StepProps) {
   );
 }
 
-// ─── Step 4: Validation Rules ─────────────────────────────────────────────────
+// ─── Step 4: Hints + Validation ───────────────────────────────────────────────
 
 export function ForgeStep4({ form, update }: StepProps) {
+  function setHint(idx: number, val: string) {
+    const next = [...form.hints] as [string, string, string];
+    next[idx] = val;
+    update({ hints: next });
+  }
+
   return (
     <div className="space-y-5">
       <StepHeader
-        title="Validation Rules"
-        hint="Control how strictly students' answers are checked."
+        title="Hints & Validation"
+        hint="Author up to 3 progressive hints and set answer-checking rules."
       />
 
-      <label className="flex items-start gap-4 cursor-pointer group">
-        <div className="relative mt-0.5 shrink-0">
-          <input
-            type="checkbox"
-            checked={form.requiresStrictOrder}
-            onChange={(e) => update({ requiresStrictOrder: e.target.checked })}
-            className="sr-only"
-          />
-          <div
-            className={[
-              'w-10 h-6 rounded-full border-2 transition-all duration-200',
-              form.requiresStrictOrder
-                ? 'bg-arcane-gold/20 border-arcane-gold'
-                : 'bg-parchment/5 border-parchment/20',
-            ].join(' ')}
-          >
-            <div
-              className={[
-                'absolute top-0.5 w-4 h-4 rounded-full transition-all duration-200',
-                form.requiresStrictOrder
-                  ? 'left-4 bg-arcane-gold'
-                  : 'left-0.5 bg-parchment-light/30',
-              ].join(' ')}
+      <div className="space-y-3">
+        {(['First hint — general direction', 'Second hint — narrow it down', 'Third hint — near-complete example'] as const).map((placeholder, idx) => (
+          <Field key={idx} label={`Hint ${idx + 1}${idx === 0 ? ' (broadest)' : idx === 2 ? ' (most specific)' : ''}`}>
+            <textarea
+              value={form.hints[idx]}
+              onChange={(e) => setHint(idx, e.target.value)}
+              placeholder={placeholder}
+              rows={2}
+              className={`${inputClass} resize-y leading-relaxed`}
             />
-          </div>
-        </div>
-        <div>
-          <p className="font-cinzel text-parchment-light text-sm font-semibold">
-            Require Strict Row Ordering
-          </p>
-          <p className="text-parchment-light/40 text-xs font-inter mt-0.5 leading-relaxed">
-            When enabled, the student&apos;s result rows must appear in exactly the same
-            order as your solution. Use this for quests that explicitly test <code className="text-arcane-blue">ORDER BY</code> or <code className="text-arcane-blue">LIMIT</code>.
-          </p>
-        </div>
-      </label>
+          </Field>
+        ))}
+      </div>
 
-      <div className="border border-border-gold/10 rounded p-3 bg-parchment/5 text-xs font-inter text-parchment-light/40 leading-relaxed">
-        <strong className="text-parchment-light/60">Default behaviour:</strong> Row order is ignored.
-        Any query that produces the correct set of columns and values will be accepted,
-        regardless of how the student orders their result.
+      <div className="border-t border-border-gold/10 pt-4">
+        <StepHeader title="Validation Rule" hint="Control how strictly student answers are checked." />
+        <label className="flex items-start gap-4 cursor-pointer group mt-3">
+          <div className="relative mt-0.5 shrink-0">
+            <input
+              type="checkbox"
+              checked={form.requiresStrictOrder}
+              onChange={(e) => update({ requiresStrictOrder: e.target.checked })}
+              className="sr-only"
+            />
+            <div className={['w-10 h-6 rounded-full border-2 transition-all duration-200', form.requiresStrictOrder ? 'bg-arcane-gold/20 border-arcane-gold' : 'bg-parchment/5 border-parchment/20'].join(' ')}>
+              <div className={['absolute top-0.5 w-4 h-4 rounded-full transition-all duration-200', form.requiresStrictOrder ? 'left-4 bg-arcane-gold' : 'left-0.5 bg-parchment-light/30'].join(' ')} />
+            </div>
+          </div>
+          <div>
+            <p className="font-cinzel text-parchment-light text-sm font-semibold">Require Strict Row Ordering</p>
+            <p className="text-parchment-light/40 text-xs font-inter mt-0.5 leading-relaxed">
+              Student rows must appear in exactly the same order as your solution. Use for <code className="text-arcane-blue">ORDER BY</code> / <code className="text-arcane-blue">LIMIT</code> quests.
+            </p>
+          </div>
+        </label>
       </div>
     </div>
   );

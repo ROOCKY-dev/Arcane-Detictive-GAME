@@ -9,6 +9,7 @@ import type { ForgeFormData } from './types';
 export interface ForgeResult {
   ok: boolean;
   message: string;
+  questId?: string;
 }
 
 /**
@@ -51,8 +52,8 @@ export async function compileAndUploadForge(form: ForgeFormData): Promise<ForgeR
   const teacherId = session.user.id;
 
   // ── Step 3: Upload .sqlite to Storage ───────────────────────────────────────
-  const questId = crypto.randomUUID();
-  const databaseUrl = await uploadCustomDatabase(questId, dbBytes);
+  const uploadId = crypto.randomUUID();
+  const databaseUrl = await uploadCustomDatabase(uploadId, dbBytes);
 
   if (!databaseUrl) {
     return {
@@ -62,7 +63,9 @@ export async function compileAndUploadForge(form: ForgeFormData): Promise<ForgeR
   }
 
   // ── Step 4: Save quest record ────────────────────────────────────────────────
-  const error = await saveCustomQuest({
+  const filteredHints = form.hints.filter((h) => h.trim().length > 0);
+
+  const { error, id: questId } = await saveCustomQuest({
     teacherId,
     title: form.title.trim(),
     locationId: form.locationId,
@@ -71,6 +74,9 @@ export async function compileAndUploadForge(form: ForgeFormData): Promise<ForgeR
     expectedSql: form.expectedSql.trim(),
     requiresStrictOrder: form.requiresStrictOrder,
     databaseUrl,
+    hints: filteredHints.length > 0 ? filteredHints : null,
+    npcName: form.npcName.trim() || null,
+    npcDialogue: form.npcDialogue.trim() || null,
   });
 
   if (error) {
@@ -79,6 +85,7 @@ export async function compileAndUploadForge(form: ForgeFormData): Promise<ForgeR
 
   return {
     ok: true,
+    questId: questId ?? undefined,
     message: `"${form.title}" has been forged and is ready for your apprentices!`,
   };
 }

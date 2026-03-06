@@ -34,3 +34,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Supabase CLI temp files
+supabase/.temp/
+
+# AI tool files
+.claude/
+.cursor/
+.aider*
+.codeium/
+*.ai-context
+CLAUDE.md

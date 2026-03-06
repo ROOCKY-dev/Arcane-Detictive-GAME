@@ -123,6 +123,9 @@ export interface Database {
           expected_sql: string;
           requires_strict_order: boolean;
           database_url: string | null;
+          hints: string[] | null;
+          npc_name: string | null;
+          npc_dialogue: string | null;
           created_at: string;
         };
         Insert: {
@@ -134,6 +137,9 @@ export interface Database {
           expected_sql: string;
           requires_strict_order?: boolean;
           database_url?: string | null;
+          hints?: string[] | null;
+          npc_name?: string | null;
+          npc_dialogue?: string | null;
         };
         Update: {
           title?: string;
@@ -141,6 +147,9 @@ export interface Database {
           expected_sql?: string;
           requires_strict_order?: boolean;
           database_url?: string | null;
+          hints?: string[] | null;
+          npc_name?: string | null;
+          npc_dialogue?: string | null;
         };
         Relationships: [];
       };
@@ -510,6 +519,9 @@ export interface CustomQuestInsert {
   expectedSql: string;
   requiresStrictOrder: boolean;
   databaseUrl: string | null;
+  hints?: string[] | null;
+  npcName?: string | null;
+  npcDialogue?: string | null;
 }
 
 export interface CustomQuestRow {
@@ -522,6 +534,9 @@ export interface CustomQuestRow {
   expected_sql: string;
   requires_strict_order: boolean;
   database_url: string | null;
+  hints: string[] | null;
+  npc_name: string | null;
+  npc_dialogue: string | null;
   created_at: string;
 }
 
@@ -541,10 +556,10 @@ export async function getCustomQuest(questId: string): Promise<CustomQuestRow | 
 }
 
 /** Insert a new custom quest record. Returns error string or null on success. */
-export async function saveCustomQuest(quest: CustomQuestInsert): Promise<string | null> {
-  if (!supabase) return 'Supabase is not configured.';
+export async function saveCustomQuest(quest: CustomQuestInsert): Promise<{ error: string | null; id: string | null }> {
+  if (!supabase) return { error: 'Supabase is not configured.', id: null };
 
-  const { error } = await supabase.from('custom_quests').insert({
+  const { data, error } = await supabase.from('custom_quests').insert({
     teacher_id: quest.teacherId,
     title: quest.title,
     location_id: quest.locationId,
@@ -553,7 +568,131 @@ export async function saveCustomQuest(quest: CustomQuestInsert): Promise<string 
     expected_sql: quest.expectedSql,
     requires_strict_order: quest.requiresStrictOrder,
     database_url: quest.databaseUrl,
-  });
+    hints: quest.hints ?? null,
+    npc_name: quest.npcName ?? null,
+    npc_dialogue: quest.npcDialogue ?? null,
+  }).select('id').single();
+
+  if (error) return { error: error.message, id: null };
+  return { error: null, id: (data as { id: string }).id };
+}
+
+/** Fetch all custom quests created by a teacher. */
+export async function getTeacherQuests(teacherId: string): Promise<CustomQuestRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('custom_quests')
+    .select('*')
+    .eq('teacher_id', teacherId)
+    .order('created_at', { ascending: false });
+  if (error || !data) return [];
+  return data as CustomQuestRow[];
+}
+
+/** Delete a custom quest by ID. Returns error string or null on success. */
+export async function deleteCustomQuest(questId: string): Promise<string | null> {
+  if (!supabase) return 'Supabase is not configured.';
+  const { error } = await supabase.from('custom_quests').delete().eq('id', questId);
+  return error ? error.message : null;
+}
+
+// ─── Profile helpers ──────────────────────────────────────────────────────────
+
+/** Update mutable profile fields for a user. Returns error string or null. */
+export async function updateProfile(
+  userId: string,
+  updates: { display_name?: string; avatar_url?: string }
+): Promise<string | null> {
+  if (!supabase) return 'Supabase is not configured.';
+  const { error } = await supabase
+    .from('profiles')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', userId);
+  return error ? error.message : null;
+}
+
+// ─── Class helpers ────────────────────────────────────────────────────────────
+
+export interface ClassRow {
+  id: string;
+  name: string;
+  invite_code: string;
+  teacher_id: string;
+  description: string | null;
+  created_at: string;
+  studentCount?: number;
+}
+
+/** Generate a short random invite code. */
+function generateInviteCode(): string {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+/** Create a new class for a teacher. Returns { inviteCode } or error string. */
+export async function createClass(
+  teacherId: string,
+  name: string,
+  description: string
+): Promise<{ inviteCode: string; id: string } | string> {
+  if (!supabase) return 'Supabase is not configured.';
+
+  const invite_code = generateInviteCode();
+  const { data, error } = await supabase
+    .from('classes')
+    .insert({ teacher_id: teacherId, name, description: description || null, invite_code })
+    .select('id')
+    .single();
+
+  if (error) return error.message;
+  return { inviteCode: invite_code, id: (data as { id: string }).id };
+}
+
+/** Fetch all classes owned by a teacher with student counts. */
+export async function getTeacherClasses(teacherId: string): Promise<ClassRow[]> {
+  if (!supabase) return [];
+
+  const { data: classesRaw } = await supabase
+    .from('classes')
+    .select('id, name, invite_code, teacher_id, description, created_at')
+    .eq('teacher_id', teacherId)
+    .order('created_at', { ascending: false });
+
+  const classes = (classesRaw as ClassRow[] | null) ?? [];
+  if (classes.length === 0) return [];
+
+  const classIds = classes.map((c) => c.id);
+  const { data: studentsRaw } = await supabase
+    .from('profiles')
+    .select('class_id')
+    .in('class_id', classIds);
+
+  const students = (studentsRaw as { class_id: string }[] | null) ?? [];
+
+  return classes.map((cls) => ({
+    ...cls,
+    studentCount: students.filter((s) => s.class_id === cls.id).length,
+  }));
+}
+
+/** Enroll a student in a class by invite code. Returns error string or null. */
+export async function joinClassByCode(
+  userId: string,
+  inviteCode: string
+): Promise<string | null> {
+  if (!supabase) return 'Supabase is not configured.';
+
+  const { data: cls } = await supabase
+    .from('classes')
+    .select('id')
+    .eq('invite_code', inviteCode.trim().toUpperCase())
+    .single();
+
+  if (!cls) return 'Invalid invite code. Double-check it and try again.';
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ class_id: (cls as { id: string }).id })
+    .eq('id', userId);
 
   return error ? error.message : null;
 }

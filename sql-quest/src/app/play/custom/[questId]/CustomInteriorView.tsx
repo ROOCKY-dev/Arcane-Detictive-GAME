@@ -7,6 +7,7 @@ import { QueryResults } from '@/components/game/QueryResults';
 import { CaseFile } from '@/components/game/CaseFile';
 import { HintSystem } from '@/components/game/HintSystem';
 import { CaseSolved } from '@/components/game/CaseSolved';
+import { NPCDialogue } from '@/components/game/NPCDialogue';
 import { MagicalButton } from '@/components/ui/MagicalButton';
 import { sfx } from '@/lib/audio';
 import { useCustomSQLEngine } from '@/hooks/useCustomSQLEngine';
@@ -14,14 +15,14 @@ import { validateResult } from '@/lib/query-validator';
 import { syncQuestProgressToCloud } from '@/lib/supabase';
 import { useGameState } from '@/hooks/useGameState';
 import type { CustomQuestRow } from '@/lib/supabase';
-import type { Quest } from '@/types/game';
+import type { Quest, QuestHint } from '@/types/game';
 
 interface CustomInteriorViewProps {
   quest: CustomQuestRow;
 }
 
-/** Build a synthetic Quest object from a custom quest DB row for component reuse. */
 function toQuest(row: CustomQuestRow, expectedResult: { columns: string[]; rows: (string | number | null)[][] } | null): Quest {
+  const hints: QuestHint[] = (row.hints ?? []).map((text, idx) => ({ order: idx + 1, text }));
   return {
     id: row.id,
     locationId: row.location_id,
@@ -30,11 +31,11 @@ function toQuest(row: CustomQuestRow, expectedResult: { columns: string[]; rows:
     difficulty: row.difficulty as Quest['difficulty'],
     sqlConcepts: [],
     narrative: row.narrative,
-    npcDialogue: row.narrative,
-    hints: [],
+    npcDialogue: row.npc_dialogue ?? row.narrative,
+    hints,
     expectedResult: expectedResult ?? { columns: [], rows: [] },
     sampleSolution: row.expected_sql,
-    successMessage: 'Outstanding work, Apprentice! The Archmage\'s mystery is solved.',
+    successMessage: 'Outstanding work, Apprentice! The mystery is solved.',
     prerequisiteQuestIds: [],
     order: 0,
     requiresStrictOrder: row.requires_strict_order,
@@ -47,8 +48,9 @@ export function CustomInteriorView({ quest }: CustomInteriorViewProps) {
   const { runQuery, reset, result, isLoading, isDbLoading, dbError, expectedResult } =
     useCustomSQLEngine(quest.id, quest.database_url ?? '', quest.expected_sql);
 
+  const [showNpc, setShowNpc] = useState(Boolean(quest.npc_dialogue));
   const [showSolved, setShowSolved] = useState(false);
-  const [hintsUsed] = useState(0);
+  const [hintsUsed, setHintsUsed] = useState(0);
   const startTimeRef = useRef(Date.now());
   const [timeSeconds, setTimeSeconds] = useState(0);
   const [attemptsRef] = useState({ count: 0 });
@@ -61,6 +63,8 @@ export function CustomInteriorView({ quest }: CustomInteriorViewProps) {
   }, []);
 
   const syntheticQuest = toQuest(quest, expectedResult);
+  const npcName = quest.npc_name ?? 'Archmage';
+  const hints = quest.hints ?? [];
 
   async function handleExecute(sql: string) {
     attemptsRef.count += 1;
@@ -76,13 +80,12 @@ export function CustomInteriorView({ quest }: CustomInteriorViewProps) {
         const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
         setTimeSeconds(elapsed);
         setShowSolved(true);
-        // Sync to Supabase if authenticated
         if (cloudSyncUserId) {
           void syncQuestProgressToCloud(cloudSyncUserId, {
             questId: quest.id,
             locationId: `custom-${quest.location_id}`,
             completed: true,
-            hintsUsed: 0,
+            hintsUsed,
             attempts: attemptsRef.count,
             timeSeconds: elapsed,
             lastQuery: sql,
@@ -127,18 +130,31 @@ export function CustomInteriorView({ quest }: CustomInteriorViewProps) {
           <span className="text-parchment-light/40 text-xs font-inter hidden sm:block">Custom Assignment</span>
         </div>
         <h1 className="font-cinzel text-arcane-gold text-sm font-bold hidden md:block">{quest.title}</h1>
-        <span className="text-parchment-light/40 text-xs font-inter">
-          {Math.floor(timeSeconds / 60)}:{String(timeSeconds % 60).padStart(2, '0')}
-        </span>
+        <div className="flex items-center gap-3">
+          {quest.npc_dialogue && (
+            <button type="button" onClick={() => setShowNpc(true)}
+              className="text-arcane-gold/50 hover:text-arcane-gold text-xs font-inter transition-colors">
+              💬 Brief
+            </button>
+          )}
+          <span className="text-parchment-light/40 text-xs font-inter">
+            {Math.floor(timeSeconds / 60)}:{String(timeSeconds % 60).padStart(2, '0')}
+          </span>
+        </div>
       </header>
 
       <div className="flex flex-col lg:flex-row gap-0 lg:gap-4 p-4 max-w-7xl mx-auto">
         <div className="w-full lg:w-[420px] shrink-0">
-          <CaseFile quest={syntheticQuest} npcName="Archmage Assignment" schema={[]} />
+          <CaseFile quest={syntheticQuest} npcName={npcName} schema={[]} />
         </div>
         <div className="flex-1 flex flex-col gap-3 min-w-0">
           <SQLTerminal onExecute={handleExecute} onReset={reset} isLoading={isLoading} />
-          <HintSystem hints={[]} />
+          {hints.length > 0 && (
+            <HintSystem
+              hints={hints.map((text, idx) => ({ order: idx + 1, text }))}
+              onHintUsed={() => setHintsUsed((n) => n + 1)}
+            />
+          )}
           <div className="border border-border-gold/20 rounded bg-parchment-dark/60 p-3">
             <div className="text-xs text-parchment-light/40 font-cinzel tracking-wider uppercase mb-2">Revelation</div>
             <QueryResults result={result} isLoading={isLoading} />
@@ -146,11 +162,21 @@ export function CustomInteriorView({ quest }: CustomInteriorViewProps) {
         </div>
       </div>
 
+      {quest.npc_dialogue && (
+        <NPCDialogue
+          isOpen={showNpc}
+          npcName={npcName}
+          npcTitle="Custom Assignment"
+          dialogue={quest.npc_dialogue}
+          onDismiss={() => setShowNpc(false)}
+        />
+      )}
+
       <CaseSolved
         isOpen={showSolved}
         questTitle={quest.title}
-        npcName="Archmage"
-        successMessage="Outstanding work, Apprentice! The Archmage's mystery is solved."
+        npcName={npcName}
+        successMessage="Outstanding work, Apprentice! The mystery is solved."
         timeSeconds={timeSeconds}
         hintsUsed={hintsUsed}
         onNextCase={() => router.push('/play')}

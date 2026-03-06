@@ -7,6 +7,7 @@ import { MagicalButton } from '@/components/ui/MagicalButton';
 import { FORGE_STEPS, FORGE_INITIAL } from './types';
 import type { ForgeFormData } from './types';
 import type { ForgeResult } from './forgeActions';
+import Link from 'next/link';
 
 export function QuestForge() {
   const [step, setStep] = useState(1);
@@ -64,13 +65,31 @@ export function QuestForge() {
         <div
           role="alert"
           className={[
-            'border rounded p-3 text-sm font-inter',
+            'border rounded p-4 text-sm font-inter space-y-3',
             result.ok
               ? 'border-arcane-green/40 bg-arcane-green/5 text-arcane-green'
               : 'border-arcane-red/30 bg-arcane-red/5 text-arcane-red',
           ].join(' ')}
         >
-          {result.message}
+          <p>{result.message}</p>
+          {result.ok && result.questId && (
+            <div className="border border-arcane-green/30 rounded p-3 bg-parchment-dark/40 space-y-1">
+              <p className="text-parchment-light/60 text-xs font-cinzel tracking-wide">Quest Code — share this with your apprentices:</p>
+              <p className="font-mono text-arcane-gold text-sm break-all">{result.questId}</p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(result.questId!)}
+                  className="text-xs text-arcane-green/70 hover:text-arcane-green underline underline-offset-2 transition-colors font-inter"
+                >
+                  ⎘ Copy code
+                </button>
+                <Link href="/archmage-tower/my-quests" className="text-xs text-arcane-blue/70 hover:text-arcane-blue underline underline-offset-2 transition-colors font-inter">
+                  View all quests →
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

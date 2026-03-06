@@ -6,11 +6,13 @@ import { WorldMap } from '@/components/game/WorldMap';
 import { MagicalButton } from '@/components/ui/MagicalButton';
 import { useProgress } from '@/hooks/useProgress';
 import { useGameState } from '@/hooks/useGameState';
+import { useAuth } from '@/hooks/useAuth';
 import { LOCATIONS } from '@/data/locations';
 
 export default function WorldMapPage() {
   const { locationProgress } = useProgress();
   const { unlockedLocationIds } = useGameState();
+  const { user, isLoading: authLoading } = useAuth();
 
   return (
     <div className="min-h-screen bg-parchment-dark">
@@ -24,11 +26,27 @@ export default function WorldMapPage() {
         <h1 className="font-cinzel text-parchment-light/70 text-sm hidden sm:block">
           The Realm of Syntaxia
         </h1>
-        <Link href="/auth/login">
-          <MagicalButton variant="gold" size="sm">
-            👤 Login
-          </MagicalButton>
-        </Link>
+        {authLoading ? (
+          <div className="w-5 h-5 border-2 border-arcane-gold/30 border-t-arcane-gold rounded-full animate-spin" />
+        ) : user ? (
+          <div className="flex items-center gap-2">
+            {user.role === 'teacher' && (
+              <Link href="/archmage-tower">
+                <MagicalButton variant="blue" size="sm">🏰 Tower</MagicalButton>
+              </Link>
+            )}
+            <Link href="/profile">
+              <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-border-gold/30 hover:border-arcane-gold/50 transition-colors text-xs font-inter text-parchment-light/70 hover:text-parchment-light">
+                <span aria-hidden="true">{user.role === 'teacher' ? '🧙' : '⚔️'}</span>
+                <span className="max-w-[80px] truncate">{user.username}</span>
+              </button>
+            </Link>
+          </div>
+        ) : (
+          <Link href="/auth/login">
+            <MagicalButton variant="gold" size="sm">👤 Login</MagicalButton>
+          </Link>
+        )}
       </header>
 
       <main className="max-w-3xl mx-auto py-8 px-4">
