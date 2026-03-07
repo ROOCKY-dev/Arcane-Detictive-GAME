@@ -8,20 +8,19 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
-
-const isSupabaseReady =
-  Boolean(supabaseUrl) &&
-  supabaseUrl !== 'https://your-project.supabase.co' &&
-  Boolean(supabaseAnonKey) &&
-  supabaseAnonKey !== 'your-anon-key-here';
+// Anon key is public (protected by RLS). Hardcoded fallback ensures the
+// middleware runs correctly in production even without Vercel env vars set.
+const supabaseUrl =
+  (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim() ||
+  'https://eyfcxhhcowkeqgqtsuel.supabase.co';
+const supabaseAnonKey =
+  (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim() ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' +
+  'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5ZmN4aGhjb3drZXFncXRzdWVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MDY0NzksImV4cCI6MjA4ODM4MjQ3OX0.' +
+  'U1eH9OLAJ7zvzpt69ys_Y3y4p54JX7L2JVZf4svVFXs';
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
-
-  // Skip guard when Supabase is not configured
-  if (!isSupabaseReady) return res;
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {

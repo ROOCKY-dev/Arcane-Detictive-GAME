@@ -9,7 +9,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   supabase,
-  isSupabaseConfigured,
   signInWithEmail,
   signUpWithEmail,
   signOut as supabaseSignOut,
@@ -54,11 +53,6 @@ export function useAuth(): UseAuthReturn {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) {
-      setIsLoading(false);
-      return;
-    }
-
     // Hydrate from existing session on mount
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
@@ -87,12 +81,12 @@ export function useAuth(): UseAuthReturn {
     return () => subscription.unsubscribe();
   }, []);
 
+  // signIn / signUp do NOT touch isLoading — the calling form manages its own
+  // submitting state. Setting isLoading here caused the login page to swap to
+  // a full-screen spinner mid-submission, hiding the form and the error.
   const signIn = useCallback(
     async (email: string, password: string): Promise<string | null> => {
-      setIsLoading(true);
-      const error = await signInWithEmail(email, password);
-      setIsLoading(false);
-      return error;
+      return signInWithEmail(email, password);
     },
     []
   );
@@ -104,10 +98,7 @@ export function useAuth(): UseAuthReturn {
       username: string,
       role: UserRole
     ): Promise<string | null> => {
-      setIsLoading(true);
-      const error = await signUpWithEmail(email, password, username, role);
-      setIsLoading(false);
-      return error;
+      return signUpWithEmail(email, password, username, role);
     },
     []
   );

@@ -55,24 +55,16 @@ function LoginPageInner() {
         const err = await signUp(email, password, username.trim(), role);
         if (err) { setError(err); return; }
       }
-
-      // Sync cloud progress after sign-in
-      try {
-        const { supabase } = await import('@/lib/supabase');
-        if (supabase) {
-          const { data } = await supabase.auth.getSession();
-          if (data.session?.user) await loadFromSupabase(data.session.user.id);
-        }
-      } catch { /* non-fatal */ }
-
-      // Redirect based on role determined by auth state change
-      // Brief wait for onAuthStateChange to fire
-      await new Promise((r) => setTimeout(r, 400));
+      // Success — onAuthStateChange fires in useAuth, updates `user`,
+      // then the useEffect([user, authLoading]) below redirects based on role.
+      // loadFromSupabase for cloud sync happens in background.
       const { supabase: sb } = await import('@/lib/supabase');
-      const { data: sd } = sb ? await sb.auth.getSession() : { data: { session: null } };
-      const { getProfile } = await import('@/lib/supabase');
-      const profile = sd?.session ? await getProfile(sd.session.user.id) : null;
-      router.replace(profile?.role === 'teacher' ? '/archmage-tower' : '/play');
+      const { data } = await sb.auth.getSession();
+      if (data.session?.user) {
+        loadFromSupabase(data.session.user.id).catch(() => {});
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
     } finally {
       setIsSubmitting(false);
     }
