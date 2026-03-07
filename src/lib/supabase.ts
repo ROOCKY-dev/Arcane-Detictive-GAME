@@ -170,26 +170,29 @@ type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 type QuestProgressRow = Database['public']['Tables']['quest_progress']['Row'];
 
 // ─── Singleton client ─────────────────────────────────────────────────────────
+// Anon key is a PUBLIC credential (safe in client bundles — data is protected by RLS).
+// Hardcoded as fallback so the app works even if the dev server started before
+// .env.local was written (Next.js reads env vars once at startup).
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const FALLBACK_URL = 'https://eyfcxhhcowkeqgqtsuel.supabase.co';
+const FALLBACK_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' +
+  'eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV5ZmN4aGhjb3drZXFncXRzdWVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MDY0NzksImV4cCI6MjA4ODM4MjQ3OX0.' +
+  'U1eH9OLAJ7zvzpt69ys_Y3y4p54JX7L2JVZf4svVFXs';
 
-const isConfigured =
-  Boolean(supabaseUrl) &&
-  supabaseUrl !== 'https://your-project.supabase.co' &&
-  Boolean(supabaseAnonKey) &&
-  supabaseAnonKey !== 'your-anon-key-here';
+const supabaseUrl =
+  (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim() || FALLBACK_URL;
+const supabaseAnonKey =
+  (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim() || FALLBACK_ANON_KEY;
 
-export const supabase: TypedSupabaseClient | null = isConfigured
-  ? createClient<Database>(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      },
-    })
-  : null;
+export const supabase: TypedSupabaseClient = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+});
 
-export const isSupabaseConfigured = isConfigured;
+export const isSupabaseConfigured = true;
 
 // ─── Auth helpers ─────────────────────────────────────────────────────────────
 
