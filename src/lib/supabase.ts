@@ -238,6 +238,28 @@ export async function signOut(): Promise<void> {
   await supabase?.auth.signOut();
 }
 
+/**
+ * Send a password-reset email. The link redirects to /auth/reset-password.
+ * Returns error string or null on success.
+ */
+export async function resetPasswordForEmail(
+  email: string,
+  redirectTo: string
+): Promise<string | null> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  return error ? error.message : null;
+}
+
+/**
+ * Set a new password for the currently authenticated user.
+ * Call this after the recovery token is exchanged on the reset-password page.
+ * Returns error string or null on success.
+ */
+export async function updatePassword(newPassword: string): Promise<string | null> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  return error ? error.message : null;
+}
+
 /** Get the current session synchronously from storage (no network call). */
 export async function getCurrentSession() {
   if (!supabase) return null;

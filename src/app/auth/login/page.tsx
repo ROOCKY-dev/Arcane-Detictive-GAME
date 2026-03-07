@@ -155,6 +155,12 @@ function LoginPageInner() {
               Continue as Guest
             </Link>
             <span className="text-parchment-light/20 text-xs">·</span>
+            {mode === 'signin' && (
+              <Link href="/auth/forgot-password" className="text-parchment-light/30 text-xs font-inter hover:text-parchment-light/60 transition-colors underline underline-offset-2">
+                Forgot password?
+              </Link>
+            )}
+            {mode === 'signin' && <span className="text-parchment-light/20 text-xs">·</span>}
             <Link href="/profile" className="text-parchment-light/30 text-xs font-inter hover:text-parchment-light/60 transition-colors underline underline-offset-2">
               View Profile
             </Link>
