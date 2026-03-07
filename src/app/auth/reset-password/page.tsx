@@ -27,26 +27,43 @@ function ResetPasswordInner() {
   const [sessionReady, setSessionReady] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
-  // Supabase sends ?token_hash=...&type=recovery in the link.
-  // Calling verifyOtp exchanges it for a session, enabling updateUser.
   useEffect(() => {
+    // Flow 1: onAuthStateChange fires PASSWORD_RECOVERY when Supabase auto-exchanges
+    // the hash-based token (#access_token=...&type=recovery) on page load.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setSessionReady(true);
+        setTokenError(null);
+      }
+    });
+
+    // Flow 2: Newer Supabase sends ?token_hash=...&type=recovery as query params.
     const tokenHash = searchParams.get('token_hash');
     const type = searchParams.get('type');
 
-    if (!tokenHash || type !== 'recovery') {
-      setTokenError('Invalid or expired recovery link. Please request a new one.');
-      return;
+    if (tokenHash && type === 'recovery') {
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error: err }) => {
+        if (err) setTokenError(err.message);
+        else setSessionReady(true);
+      });
+      return () => subscription.unsubscribe();
     }
 
-    supabase.auth
-      .verifyOtp({ token_hash: tokenHash, type: 'recovery' })
-      .then(({ error: err }) => {
-        if (err) {
-          setTokenError(err.message);
-        } else {
-          setSessionReady(true);
-        }
-      });
+    // Flow 3: No params at all — check if there is already an active session
+    // (happens when hash was processed before this component mounted).
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setSessionReady(true);
+      } else {
+        // Give onAuthStateChange a moment to fire before showing the error.
+        const timer = setTimeout(() => {
+          setTokenError('Invalid or expired recovery link. Please request a new one.');
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -111,8 +128,9 @@ function ResetPasswordInner() {
               </p>
             </div>
           ) : !sessionReady ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex flex-col items-center justify-center py-8 gap-3">
               <div className="w-8 h-8 border-2 border-arcane-gold/40 border-t-arcane-gold rounded-full animate-spin" />
+              <p className="text-parchment-light/40 text-xs font-inter">Verifying recovery link...</p>
             </div>
           ) : (
             <>
